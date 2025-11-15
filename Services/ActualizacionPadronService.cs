@@ -63,27 +63,41 @@ public class ActualizacionPadronService
 
             var padron = claveCatastral.PadronNavigation;
 
-            // Obtener año final del concepto
-            if (string.IsNullOrWhiteSpace(dto.AnioFinal))
+            // Obtener año inicial y final del concepto
+            int? anioInicial = null;
+            int? anioFinal = null;
+
+            if (!string.IsNullOrWhiteSpace(dto.AnioInicial) && int.TryParse(dto.AnioInicial, out int ai))
+            {
+                anioInicial = ai;
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.AnioFinal) && int.TryParse(dto.AnioFinal, out int af))
+            {
+                anioFinal = af;
+            }
+
+            // Si no hay año final, omitir
+            if (!anioFinal.HasValue)
             {
                 solicitudesOmitidas++;
                 continue;
             }
 
-            if (!int.TryParse(dto.AnioFinal, out int anioFinal))
+            // Si no hay año inicial, usar el año final
+            if (!anioInicial.HasValue)
             {
-                solicitudesOmitidas++;
-                continue;
+                anioInicial = anioFinal;
             }
 
             // Actualizar último año de pago solo si es mayor
-            if (!padron.Pago.HasValue || padron.Pago.Value < anioFinal)
+            if (!padron.Pago.HasValue || padron.Pago.Value < anioFinal.Value)
             {
-                padron.Pago = anioFinal;
+                padron.Pago = anioFinal.Value;
                 padronesActualizados++;
             }
 
-            // Actualizar adeudos
+            // Actualizar adeudos - obtener todos los adeudos del padrón
             var adeudos = await _contextCatastro.Adeudos
                 .Where(a => a.Padron == padron.Id)
                 .ToListAsync();
@@ -94,10 +108,10 @@ public class ActualizacionPadronService
                 {
                     int anioAdeudo = adeudo.FechaInicio.Value.Year;
                     
-                    // Verificar si el año del adeudo está dentro del rango cubierto
-                    if (anioAdeudo <= anioFinal)
+                    // Verificar si el año del adeudo está dentro del rango cubierto (entre año inicial y año final)
+                    if (anioAdeudo >= anioInicial.Value && anioAdeudo <= anioFinal.Value)
                     {
-                        adeudo.Estatus = 2;
+                        adeudo.Estatus = 2; // Marcar como pagado
                         adeudosActualizados++;
                     }
                 }
