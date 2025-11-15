@@ -27,6 +27,24 @@ public class SincronizacionPagosService
         // Obtener los datos de la tarea anterior
         var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
 
+        // Obtener todos los montos de una vez para evitar consultas repetidas
+        var folios = solicitudesConceptos.Select(s => s.FolioRecaudacion).Distinct().ToList();
+        
+        var solicitudes = await _contextPV.Solicitud
+            .Where(s => folios.Contains(s.FolioRecaudacion))
+            .ToListAsync();
+
+        var solicitudIds = solicitudes.Select(s => s.Id).ToList();
+
+        var conceptosSolicitud = await _contextPV.ConceptoSolicitud
+            .Where(cs => solicitudIds.Contains(cs.Solicitud))
+            .ToListAsync();
+
+        var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
+        var conceptos = await _contextPV.Concepto
+            .Where(c => conceptoIds.Contains(c.Id))
+            .ToListAsync();
+
         var previsualizacion = new List<object>();
         int registrosValidos = 0;
         int registrosOmitidos = 0;
@@ -43,8 +61,12 @@ public class SincronizacionPagosService
                 continue;
             }
 
-            // Obtener el monto del concepto_solicitud
-            var monto = await ObtenerMontoConceptoSolicitud(dto);
+            // Obtener el monto sin hacer consulta a BD
+            var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
+            var concepto = conceptos.FirstOrDefault(c => c.Nombre == dto.NombreConcepto);
+            var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
+                cs.Solicitud == solicitud?.Id && cs.Concepto == concepto?.Id);
+            var monto = conceptoSol?.Monto ?? 0;
 
             previsualizacion.Add(new
             {
@@ -87,7 +109,7 @@ public class SincronizacionPagosService
             registrosValidos,
             registrosOmitidos,
             totalProcesados = solicitudesConceptos.Count,
-            datos = previsualizacion.Take(10).ToList(), // Mostrar solo los primeros 10 para no saturar
+            datos = previsualizacion.Take(10).ToList(),
             nota = previsualizacion.Count > 10 ? $"Mostrando 10 de {previsualizacion.Count} registros" : null
         };
     }
@@ -96,6 +118,24 @@ public class SincronizacionPagosService
     {
         // Obtener los datos de la tarea anterior
         var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
+
+        // Obtener todos los montos de una vez
+        var folios = solicitudesConceptos.Select(s => s.FolioRecaudacion).Distinct().ToList();
+        
+        var solicitudes = await _contextPV.Solicitud
+            .Where(s => folios.Contains(s.FolioRecaudacion))
+            .ToListAsync();
+
+        var solicitudIds = solicitudes.Select(s => s.Id).ToList();
+
+        var conceptosSolicitud = await _contextPV.ConceptoSolicitud
+            .Where(cs => solicitudIds.Contains(cs.Solicitud))
+            .ToListAsync();
+
+        var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
+        var conceptos = await _contextPV.Concepto
+            .Where(c => conceptoIds.Contains(c.Id))
+            .ToListAsync();
 
         int registrosInsertados = 0;
         int registrosOmitidos = 0;
@@ -112,11 +152,15 @@ public class SincronizacionPagosService
                 if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento))
                 {
                     registrosOmitidos++;
-                    continue; // Omitir si no hay fechas válidas
+                    continue;
                 }
 
-                // Obtener el monto del concepto_solicitud
-                var monto = await ObtenerMontoConceptoSolicitud(dto);
+                // Obtener el monto sin hacer consulta a BD
+                var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
+                var concepto = conceptos.FirstOrDefault(c => c.Nombre == dto.NombreConcepto);
+                var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
+                    cs.Solicitud == solicitud?.Id && cs.Concepto == concepto?.Id);
+                var monto = conceptoSol?.Monto ?? 0;
 
                 // Crear el registro de pago
                 var pago = new ERP.CONTEXTSIGSA.Entities.SIS_Pagos
@@ -229,21 +273,41 @@ public class SincronizacionPagosService
 
     private async Task<decimal> ObtenerMontoConceptoSolicitud(SolicitudConceptoDto dto)
     {
-        // Buscar el concepto_solicitud correspondiente
-        var conceptoSolicitud = await _contextPV.ConceptoSolicitud
-            .Join(_contextPV.Solicitud,
-                cs => cs.Solicitud,
-                s => s.Id,
-                (cs, s) => new { ConceptoSolicitud = cs, Solicitud = s })
-            .Where(x => x.Solicitud.FolioRecaudacion == dto.FolioRecaudacion)
-            .Join(_contextPV.Concepto,
-                x => x.ConceptoSolicitud.Concepto,
-                c => c.Id,
-                (x, c) => new { x.ConceptoSolicitud, x.Solicitud, Concepto = c })
-            .Where(x => x.Concepto.Nombre == dto.NombreConcepto)
-            .Select(x => x.ConceptoSolicitud.Monto)
-            .FirstOrDefaultAsync();
+        try
+        {
+            // Buscar la solicitud por folio
+            var solicitud = await _contextPV.Solicitud
+                .FirstOrDefaultAsync(s => s.FolioRecaudacion == dto.FolioRecaudacion);
 
-        return conceptoSolicitud ?? 0;
+            if (solicitud == null)
+                return 0;
+
+            // Obtener conceptos de la solicitud
+            var conceptosSolicitud = await _contextPV.ConceptoSolicitud
+                .Where(cs => cs.Solicitud == solicitud.Id)
+                .ToListAsync();
+
+            if (!conceptosSolicitud.Any())
+                return 0;
+
+            // Obtener todos los conceptos
+            var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
+            var conceptos = await _contextPV.Concepto
+                .Where(c => conceptoIds.Contains(c.Id))
+                .ToListAsync();
+
+            // Buscar el concepto que coincida con el nombre
+            var concepto = conceptos.FirstOrDefault(c => c.Nombre == dto.NombreConcepto);
+            if (concepto == null)
+                return 0;
+
+            // Buscar el monto del concepto_solicitud
+            var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => cs.Concepto == concepto.Id);
+            return conceptoSol?.Monto ?? 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
     }
 }

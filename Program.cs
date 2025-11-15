@@ -10,7 +10,11 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionStringPV = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_punto_venta;User ID=root;Password=Truenos21;";
 
 var optionsBuilderPV = new DbContextOptionsBuilder<DbErpPuntoVentaContext>();
-optionsBuilderPV.UseMySql(connectionStringPV, ServerVersion.AutoDetect(connectionStringPV));
+optionsBuilderPV.UseMySql(connectionStringPV, ServerVersion.AutoDetect(connectionStringPV), 
+    mysqlOptions => mysqlOptions.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(10),
+        errorNumbersToAdd: null));
 
 builder.Services.AddScoped<DbErpPuntoVentaContext>(provider => 
     new DbErpPuntoVentaContext(optionsBuilderPV.Options));
@@ -19,7 +23,11 @@ builder.Services.AddScoped<DbErpPuntoVentaContext>(provider =>
 var connectionStringSigsa = builder.Configuration.GetConnectionString("SigsaConnection");
 
 var optionsBuilderSigsa = new DbContextOptionsBuilder<SigsaContext>();
-optionsBuilderSigsa.UseMySql(connectionStringSigsa, ServerVersion.AutoDetect(connectionStringSigsa));
+optionsBuilderSigsa.UseMySql(connectionStringSigsa, ServerVersion.AutoDetect(connectionStringSigsa),
+    mysqlOptions => mysqlOptions.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(10),
+        errorNumbersToAdd: null));
 
 builder.Services.AddScoped<SigsaContext>(provider => 
     new SigsaContext(optionsBuilderSigsa.Options));
@@ -28,7 +36,11 @@ builder.Services.AddScoped<SigsaContext>(provider =>
 var connectionStringCatastro = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_catastro;User ID=root;Password=Truenos21;";
 
 var optionsBuilderCatastro = new DbContextOptionsBuilder<DbErpCatastroContext>();
-optionsBuilderCatastro.UseMySql(connectionStringCatastro, ServerVersion.AutoDetect(connectionStringCatastro));
+optionsBuilderCatastro.UseMySql(connectionStringCatastro, ServerVersion.AutoDetect(connectionStringCatastro),
+    mysqlOptions => mysqlOptions.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(10),
+        errorNumbersToAdd: null));
 
 builder.Services.AddScoped<DbErpCatastroContext>(provider => 
     new DbErpCatastroContext(optionsBuilderCatastro.Options));
