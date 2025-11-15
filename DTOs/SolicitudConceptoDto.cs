@@ -2,6 +2,7 @@ namespace IdentificacionPagos.DTOs;
 
 public class SolicitudConceptoDto
 {
+    public long ConceptoId { get; set; }
     public string NombreConcepto { get; set; } = string.Empty;
     public string FolioRecaudacion { get; set; } = string.Empty;
     public DateTime? FechaPago { get; set; }

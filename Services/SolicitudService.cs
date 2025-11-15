@@ -68,6 +68,7 @@ public class SolicitudService
 
                 resultadoFinal.Add(new SolicitudConceptoDto
                 {
+                    ConceptoId = concepto?.Id ?? 0,
                     NombreConcepto = concepto?.Nombre ?? string.Empty,
                     FolioRecaudacion = solicitud.FolioRecaudacion ?? string.Empty,
                     FechaPago = solicitud.FechaPago,

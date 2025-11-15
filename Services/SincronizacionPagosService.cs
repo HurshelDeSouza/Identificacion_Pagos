@@ -63,9 +63,8 @@ public class SincronizacionPagosService
 
             // Obtener el monto sin hacer consulta a BD
             var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
-            var concepto = conceptos.FirstOrDefault(c => c.Nombre == dto.NombreConcepto);
             var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
-                cs.Solicitud == solicitud?.Id && cs.Concepto == concepto?.Id);
+                cs.Solicitud == solicitud?.Id && cs.Concepto == dto.ConceptoId);
             var monto = conceptoSol?.Monto ?? 0;
 
             previsualizacion.Add(new
@@ -157,9 +156,8 @@ public class SincronizacionPagosService
 
                 // Obtener el monto sin hacer consulta a BD
                 var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
-                var concepto = conceptos.FirstOrDefault(c => c.Nombre == dto.NombreConcepto);
                 var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
-                    cs.Solicitud == solicitud?.Id && cs.Concepto == concepto?.Id);
+                    cs.Solicitud == solicitud?.Id && cs.Concepto == dto.ConceptoId);
                 var monto = conceptoSol?.Monto ?? 0;
 
                 // Crear el registro de pago
