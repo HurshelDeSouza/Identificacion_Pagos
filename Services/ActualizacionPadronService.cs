@@ -49,15 +49,19 @@ public class ActualizacionPadronService
             // Normalizar cuenta predial
             var cuentaPredialNormalizada = NormalizarCuentaPredial(dto.CuentaPredial);
 
-            // Buscar en padrones por clave catastral
-            var padron = await _contextCatastro.Padrones
-                .FirstOrDefaultAsync(p => p.ClaveCatastral == cuentaPredialNormalizada);
+            // Buscar en clave_catastral_padron
+            var claveCatastral = await _contextCatastro.ClaveCatastralPadron
+                .Include(ccp => ccp.PadronNavigation)
+                .FirstOrDefaultAsync(ccp => ccp.ClaveCatastral == cuentaPredialNormalizada && 
+                                           ccp.TipoClave == 3);
 
-            if (padron == null)
+            if (claveCatastral?.PadronNavigation == null)
             {
                 padronesNoEncontrados++;
                 continue;
             }
+
+            var padron = claveCatastral.PadronNavigation;
 
             // Obtener año final del concepto
             if (string.IsNullOrWhiteSpace(dto.AnioFinal))
@@ -86,14 +90,16 @@ public class ActualizacionPadronService
 
             foreach (var adeudo in adeudos)
             {
-                // El periodo es el año del adeudo
-                int anioAdeudo = adeudo.Periodo;
-                
-                // Verificar si el año del adeudo está dentro del rango cubierto
-                if (anioAdeudo <= anioFinal)
+                if (adeudo.FechaInicio.HasValue)
                 {
-                    adeudo.Estatus = 2; // Marcar como pagado
-                    adeudosActualizados++;
+                    int anioAdeudo = adeudo.FechaInicio.Value.Year;
+                    
+                    // Verificar si el año del adeudo está dentro del rango cubierto
+                    if (anioAdeudo <= anioFinal)
+                    {
+                        adeudo.Estatus = 2;
+                        adeudosActualizados++;
+                    }
                 }
             }
         }

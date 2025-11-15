@@ -36,9 +36,11 @@ public class DebugCatastroController : ControllerBase
     [HttpGet("padron-sample")]
     public async Task<ActionResult> GetPadronSample()
     {
-        var padron = await _context.Padrones.FirstOrDefaultAsync();
-        if (padron == null)
-            return NotFound(new { mensaje = "No se encontraron registros en Padrones" });
+        var claveCat = await _context.ClaveCatastralPadron.Include(c => c.PadronNavigation).FirstOrDefaultAsync();
+        if (claveCat?.PadronNavigation == null)
+            return NotFound(new { mensaje = "No se encontraron registros en Padron" });
+
+        var padron = claveCat.PadronNavigation;
 
         var properties = padron.GetType().GetProperties()
             .Select(p => new { 
@@ -54,23 +56,23 @@ public class DebugCatastroController : ControllerBase
         });
     }
 
-    [HttpGet("adeudo-sample")]
-    public async Task<ActionResult> GetAdeudoSample()
+    [HttpGet("clave-catastral-sample")]
+    public async Task<ActionResult> GetClaveCatastralSample()
     {
-        var adeudo = await _context.Adeudos.FirstOrDefaultAsync();
-        if (adeudo == null)
-            return NotFound(new { mensaje = "No se encontraron registros en Adeudos" });
+        var clave = await _context.ClaveCatastralPadron.FirstOrDefaultAsync();
+        if (clave == null)
+            return NotFound(new { mensaje = "No se encontraron registros en ClaveCatastralPadron" });
 
-        var properties = adeudo.GetType().GetProperties()
+        var properties = clave.GetType().GetProperties()
             .Select(p => new { 
                 Nombre = p.Name, 
-                Valor = p.GetValue(adeudo)?.ToString() ?? "null",
+                Valor = p.GetValue(clave)?.ToString() ?? "null",
                 Tipo = p.PropertyType.Name
             })
             .ToList();
 
         return Ok(new { 
-            mensaje = "Propiedades de la entidad Adeudo",
+            mensaje = "Propiedades de la entidad ClaveCatastralPadron",
             propiedades = properties 
         });
     }
