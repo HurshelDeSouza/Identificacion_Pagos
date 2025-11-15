@@ -55,7 +55,7 @@ public class SincronizacionPagosService
             var cuentaPredialNormalizada = NormalizarCuentaPredial(dto.CuentaPredial);
 
             // Validar y procesar fechas
-            if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento))
+            if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento, out int? anioParaCampo))
             {
                 registrosOmitidos++;
                 continue;
@@ -84,7 +84,7 @@ public class SincronizacionPagosService
                     referencia = $"{{03}}{{{cuentaPredialNormalizada}}}",
                     interlocutor = cuentaPredialNormalizada,
                     descripcion = dto.NombreConcepto,
-                    año = fechaVencimiento?.Year ?? DateTime.Now.Year,
+                    año = anioParaCampo ?? DateTime.Now.Year,
                     division = 0,
                     fechaCreacion = fechaCreacion,
                     fechaVencimiento = fechaVencimiento,
@@ -149,7 +149,7 @@ public class SincronizacionPagosService
                 var cuentaPredialNormalizada = NormalizarCuentaPredial(dto.CuentaPredial);
 
                 // Validar y procesar fechas
-                if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento))
+                if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento, out int? anioParaCampo))
                 {
                     registrosOmitidos++;
                     continue;
@@ -166,7 +166,7 @@ public class SincronizacionPagosService
                 var pago = new ERP.CONTEXTSIGSA.Entities.SIS_Pagos
                 {
                     Descripcion = dto.NombreConcepto,
-                    Año = fechaVencimiento?.Year ?? DateTime.Now.Year,
+                    Año = anioParaCampo ?? DateTime.Now.Year,
                     Division = 0,
                     FechaCreacion = fechaCreacion,
                     FechaVencimiento = fechaVencimiento,
@@ -238,10 +238,11 @@ public class SincronizacionPagosService
         return $"U{cuentaPredial.Trim()}";
     }
 
-    private bool ProcesarFechas(string anioInicial, string anioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento)
+    private bool ProcesarFechas(string anioInicial, string anioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento, out int? anioParaCampo)
     {
         fechaCreacion = null;
         fechaVencimiento = null;
+        anioParaCampo = null;
 
         // Si ambos están vacíos, omitir
         if (string.IsNullOrWhiteSpace(anioInicial) && string.IsNullOrWhiteSpace(anioFinal))
@@ -250,21 +251,36 @@ public class SincronizacionPagosService
         }
 
         // Si solo uno tiene valor, usar el mismo para ambos
-        string anioAUsar;
+        string anioParaFechas;
+        string anioFinalStr;
+        
         if (!string.IsNullOrWhiteSpace(anioInicial) && !string.IsNullOrWhiteSpace(anioFinal))
         {
-            anioAUsar = anioInicial; // Usar año inicial si ambos tienen valor
+            anioParaFechas = anioInicial; // Usar año inicial para fechas
+            anioFinalStr = anioFinal; // Usar año final para el campo "año"
         }
         else
         {
-            anioAUsar = !string.IsNullOrWhiteSpace(anioInicial) ? anioInicial : anioFinal;
+            // Si solo hay uno, usar el mismo para todo
+            anioParaFechas = !string.IsNullOrWhiteSpace(anioInicial) ? anioInicial : anioFinal;
+            anioFinalStr = anioParaFechas;
         }
 
-        // Intentar parsear el año
-        if (int.TryParse(anioAUsar, out int ano))
+        // Intentar parsear el año para fechas
+        if (int.TryParse(anioParaFechas, out int anoFechas))
         {
-            fechaCreacion = new DateTime(ano, 1, 1);
-            fechaVencimiento = new DateTime(ano, 12, 31);
+            fechaCreacion = new DateTime(anoFechas, 1, 1);
+            fechaVencimiento = new DateTime(anoFechas, 12, 31);
+        }
+        else
+        {
+            return false;
+        }
+
+        // Intentar parsear el año final para el campo "año"
+        if (int.TryParse(anioFinalStr, out int anoFinal))
+        {
+            anioParaCampo = anoFinal;
             return true;
         }
 
