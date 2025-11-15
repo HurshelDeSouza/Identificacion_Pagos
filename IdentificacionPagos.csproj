@@ -13,6 +13,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="ERP.CONTEXTPV" Version="2.16.1-alpha" />
     <PackageReference Include="ERP.CONTEXTSIGSA" Version="2.2.1.1" />
+    <PackageReference Include="GRP.ContextCatastro" Version="3.0.0" />
   </ItemGroup>
 
 </Project>

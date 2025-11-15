@@ -14,6 +14,20 @@ public class SincronizacionController : ControllerBase
         _sincronizacionService = sincronizacionService;
     }
 
+    [HttpGet("previsualizar-pagos")]
+    public async Task<ActionResult> PrevisualizarPagos()
+    {
+        try
+        {
+            var resultado = await _sincronizacionService.PrevisualizarPagosAsync();
+            return Ok(resultado);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al previsualizar pagos", error = ex.Message, stackTrace = ex.StackTrace });
+        }
+    }
+
     [HttpPost("sincronizar-pagos")]
     public async Task<ActionResult> SincronizarPagos()
     {

@@ -22,6 +22,76 @@ public class SincronizacionPagosService
         _solicitudService = solicitudService;
     }
 
+    public async Task<object> PrevisualizarPagosAsync()
+    {
+        // Obtener los datos de la tarea anterior
+        var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
+
+        var previsualizacion = new List<object>();
+        int registrosValidos = 0;
+        int registrosOmitidos = 0;
+
+        foreach (var dto in solicitudesConceptos)
+        {
+            // Normalizar cuenta predial
+            var cuentaPredialNormalizada = NormalizarCuentaPredial(dto.CuentaPredial);
+
+            // Validar y procesar fechas
+            if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento))
+            {
+                registrosOmitidos++;
+                continue;
+            }
+
+            // Obtener el monto del concepto_solicitud
+            var monto = await ObtenerMontoConceptoSolicitud(dto);
+
+            previsualizacion.Add(new
+            {
+                // Datos originales
+                cuentaPredialOriginal = dto.CuentaPredial,
+                nombreConcepto = dto.NombreConcepto,
+                folioRecaudacion = dto.FolioRecaudacion,
+                fechaPago = dto.FechaPago,
+                anioInicial = dto.AnioInicial,
+                anioFinal = dto.AnioFinal,
+                
+                // Datos que se insertarán en SIS_Pagos
+                datosSISPagos = new
+                {
+                    referencia = $"{{03}}{{{cuentaPredialNormalizada}}}",
+                    interlocutor = cuentaPredialNormalizada,
+                    descripcion = dto.NombreConcepto,
+                    año = fechaVencimiento?.Year ?? DateTime.Now.Year,
+                    division = 0,
+                    fechaCreacion = fechaCreacion,
+                    fechaVencimiento = fechaVencimiento,
+                    cantidad = monto,
+                    estatus = "x",
+                    folioPago = dto.FolioRecaudacion,
+                    fechaPago = dto.FechaPago,
+                    origenPago = "M",
+                    concepto = 0,
+                    folioCancelacion = (string?)null,
+                    fechaCancelacion = (DateTime?)null,
+                    clavePago = (string?)null
+                }
+            });
+
+            registrosValidos++;
+        }
+
+        return new
+        {
+            mensaje = "Previsualización de sincronización",
+            registrosValidos,
+            registrosOmitidos,
+            totalProcesados = solicitudesConceptos.Count,
+            datos = previsualizacion.Take(10).ToList(), // Mostrar solo los primeros 10 para no saturar
+            nota = previsualizacion.Count > 10 ? $"Mostrando 10 de {previsualizacion.Count} registros" : null
+        };
+    }
+
     public async Task<object> SincronizarPagosAsync()
     {
         // Obtener los datos de la tarea anterior

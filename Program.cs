@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using IdentificacionPagos.Services;
 using ERP.CONTEXTPV;
 using ERP.CONTEXTSIGSA;
+using GRP.ContextCatastro;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,8 +24,19 @@ optionsBuilderSigsa.UseMySql(connectionStringSigsa, ServerVersion.AutoDetect(con
 builder.Services.AddScoped<SigsaContext>(provider => 
     new SigsaContext(optionsBuilderSigsa.Options));
 
+// Configurar el contexto de Catastro con DbContextOptions para MySQL
+var connectionStringCatastro = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_catastro;User ID=root;Password=Truenos21;";
+
+var optionsBuilderCatastro = new DbContextOptionsBuilder<DbErpCatastroContext>();
+optionsBuilderCatastro.UseMySql(connectionStringCatastro, ServerVersion.AutoDetect(connectionStringCatastro));
+
+builder.Services.AddScoped<DbErpCatastroContext>(provider => 
+    new DbErpCatastroContext(optionsBuilderCatastro.Options));
+
+// Registrar servicios
 builder.Services.AddScoped<SolicitudService>();
 builder.Services.AddScoped<SincronizacionPagosService>();
+builder.Services.AddScoped<ActualizacionPadronService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
