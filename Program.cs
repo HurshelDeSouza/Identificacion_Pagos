@@ -1,19 +1,30 @@
 using Microsoft.EntityFrameworkCore;
 using IdentificacionPagos.Services;
 using ERP.CONTEXTPV;
+using ERP.CONTEXTSIGSA;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configurar el contexto con DbContextOptions para MySQL
-var connectionString = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_punto_venta;User ID=root;Password=Truenos21;";
+// Configurar el contexto de Punto de Venta con DbContextOptions para MySQL
+var connectionStringPV = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_punto_venta;User ID=root;Password=Truenos21;";
 
-var optionsBuilder = new DbContextOptionsBuilder<DbErpPuntoVentaContext>();
-optionsBuilder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+var optionsBuilderPV = new DbContextOptionsBuilder<DbErpPuntoVentaContext>();
+optionsBuilderPV.UseMySql(connectionStringPV, ServerVersion.AutoDetect(connectionStringPV));
 
 builder.Services.AddScoped<DbErpPuntoVentaContext>(provider => 
-    new DbErpPuntoVentaContext(optionsBuilder.Options));
+    new DbErpPuntoVentaContext(optionsBuilderPV.Options));
+
+// Configurar el contexto de SIGSA con DbContextOptions para MySQL
+var connectionStringSigsa = builder.Configuration.GetConnectionString("SigsaConnection");
+
+var optionsBuilderSigsa = new DbContextOptionsBuilder<SigsaContext>();
+optionsBuilderSigsa.UseMySql(connectionStringSigsa, ServerVersion.AutoDetect(connectionStringSigsa));
+
+builder.Services.AddScoped<SigsaContext>(provider => 
+    new SigsaContext(optionsBuilderSigsa.Options));
 
 builder.Services.AddScoped<SolicitudService>();
+builder.Services.AddScoped<SincronizacionPagosService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

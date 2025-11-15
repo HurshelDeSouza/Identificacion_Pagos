@@ -114,3 +114,71 @@ El servicio `SolicitudService` realiza las siguientes operaciones:
 - El proyecto utiliza el paquete **ERP.CONTEXTPV** que proporciona el contexto `DbErpPuntoVentaContext` con todas las entidades de la base de datos
 - Las consultas están optimizadas para minimizar las llamadas a la base de datos
 - Swagger está habilitado en todos los ambientes para facilitar las pruebas
+
+
+## Sincronización de Pagos
+
+### Endpoint de Sincronización
+
+**POST** `/api/Sincronizacion/sincronizar-pagos`
+
+Este endpoint sincroniza los pagos identificados hacia la base de datos SIGSA (sbm_CORONANGO), registrándolos en la tabla `SIS_Pagos`.
+
+#### Proceso de Sincronización
+
+1. **Normalización de Cuenta Predial**: 
+   - Patrón `R-123`, `U-456`, `S-789` → Se elimina el guión: `R123`, `U456`, `S789`
+   - Patrón `123` (solo número) → Se agrega `U` por defecto: `U123`
+   - Patrón `U123` (ya normalizado) → Se mantiene igual
+
+2. **Procesamiento de Fechas**:
+   - Si ambos campos (Año Inicial y Año Final) están vacíos → Se omite el registro
+   - Si solo uno tiene valor → Se usa el mismo valor para ambas fechas
+   - `fechaCreacion` = 01/01/{año inicial}
+   - `fechaVencimiento` = 31/12/{año inicial}
+
+3. **Mapeo de Campos a SIS_Pagos**:
+
+| Campo SIS_Pagos | Origen | Valor Default |
+|-----------------|--------|---------------|
+| descripcion | nombre del concepto | |
+| año | año final | |
+| division | | 0 |
+| fechaCreacion | 01/01/{año inicial} | |
+| fechaVencimiento | 31/12/{año inicial} | |
+| cantidad | monto en concepto_solicitud | |
+| estatus | | x |
+| folioPago | folio_recaudacion | |
+| fechaPago | fecha_pago | |
+| originPago | | M |
+| folioCancelacion | | null |
+| fechaCancelacion | | null |
+| clave_pago | | null |
+| referencia | {03}{cuenta_predial} | |
+| Interlocutor | cuenta predial | |
+| concepto | | 0 |
+
+#### Respuesta
+
+```json
+{
+  "mensaje": "Sincronización completada",
+  "registrosInsertados": 100,
+  "registrosOmitidos": 5,
+  "totalProcesados": 105,
+  "errores": []
+}
+```
+
+### Base de Datos SIGSA
+
+**Cadena de Conexión**: 
+```
+Server=189.203.180.53;Port=3307;Database=sbm_CORONANGO;User ID=root;Password=Truenos21
+```
+
+**Paquete**: `ERP.CONTEXTSIGSA v2.2.1.1`
+
+**Contexto**: `SigsaContext`
+
+**Tabla**: `SIS_Pagos`

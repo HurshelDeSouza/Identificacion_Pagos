@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.17" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="ERP.CONTEXTPV" Version="2.16.1-alpha" />
+    <PackageReference Include="ERP.CONTEXTSIGSA" Version="2.2.1.1" />
   </ItemGroup>
 
 </Project>
