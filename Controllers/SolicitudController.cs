@@ -56,4 +56,18 @@ public class SolicitudController : ControllerBase
             return StatusCode(500, new { mensaje = "Error al obtener las respuestas", error = ex.Message });
         }
     }
+
+    [HttpGet("todos-campos")]
+    public async Task<ActionResult> ObtenerTodosCampos()
+    {
+        try
+        {
+            var campos = await _solicitudService.ObtenerTodosCamposAsync();
+            return Ok(campos);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al obtener los campos", error = ex.Message });
+        }
+    }
 }

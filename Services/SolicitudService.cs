@@ -15,60 +15,74 @@ public class SolicitudService
 
     public async Task<List<SolicitudConceptoDto>> ObtenerSolicitudesConCuentaPredialAsync()
     {
-        // Obtener todas las solicitudes que tienen respuestas del formulario con id 1 (Cuenta Predial)
-        var solicitudesConFormulario = await _context.RespuestaCampoFormulario
+        // Obtener IDs de solicitudes que tienen respuestas del formulario con id 1 (Cuenta Predial)
+        var solicitudIds = await _context.RespuestaCampoFormulario
             .Where(rcf => rcf.Formulario == 1)
             .Select(rcf => rcf.Solicitud)
             .Distinct()
             .ToListAsync();
 
-        // Obtener los datos de las solicitudes
+        // Obtener solicitudes con sus relaciones usando Include
         var solicitudes = await _context.Solicitud
-            .Where(s => solicitudesConFormulario.Contains(s.Id))
+            .Where(s => solicitudIds.Contains(s.Id))
             .ToListAsync();
 
-        var solicitudIds = solicitudes.Select(s => s.Id).ToList();
+        // Obtener conceptos de solicitud con la relación de Concepto usando Include
+        var conceptosSolicitud = await _context.ConceptoSolicitud
+            .Where(cs => solicitudIds.Contains(cs.Solicitud))
+            .ToListAsync();
 
-        // Obtener los conceptos relacionados
-        var conceptosSolicitud = await _context.ConceptoSolicitud.ToListAsync();
-        conceptosSolicitud = conceptosSolicitud.Where(cs => solicitudIds.Contains(cs.Solicitud)).ToList();
+        // Obtener todos los conceptos necesarios
+        var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
+        var conceptos = await _context.Concepto
+            .Where(c => conceptoIds.Contains(c.Id))
+            .ToListAsync();
 
-        var conceptos = await _context.Concepto.ToListAsync();
-
-        // Obtener las respuestas de los campos específicos del formulario
+        // Obtener respuestas de TODOS los formularios (no solo formulario 1)
         var respuestasCampos = await _context.RespuestaCampoFormulario
-            .Where(rcf => rcf.Formulario == 1)
+            .Where(rcf => rcf.Solicitud != null && solicitudIds.Contains(rcf.Solicitud.Value))
             .ToListAsync();
-        
-        respuestasCampos = respuestasCampos.Where(rcf => rcf.Solicitud != null && solicitudIds.Any(id => id == rcf.Solicitud.Value)).ToList();
 
+        // Obtener todos los campos de formulario necesarios
         var campos = await _context.CampoFormulario
             .ToListAsync();
 
-        // Combinar los datos
-        var resultadoFinal = solicitudes.Select(s =>
+        // Combinar los datos - crear un DTO por cada conceptoSolicitud
+        var resultadoFinal = new List<SolicitudConceptoDto>();
+
+        foreach (var solicitud in solicitudes)
         {
-            var conceptoSolicitud = conceptosSolicitud.FirstOrDefault(cs => cs.Solicitud.Equals(s.Id));
-            var concepto = conceptoSolicitud != null 
-                ? conceptos.FirstOrDefault(c => c.Clave.Equals(conceptoSolicitud.Concepto)) 
-                : null;
+            // Obtener TODOS los conceptos de esta solicitud
+            var conceptosSolicitudActual = conceptosSolicitud.Where(cs => cs.Solicitud.Equals(solicitud.Id)).ToList();
+            
+            // Obtener las respuestas de esta solicitud
+            var respuestasSolicitud = respuestasCampos.Where(rcf => rcf.Solicitud == solicitud.Id).ToList();
+            
+            // Obtener la cuenta predial
+            var cuentaPredial = ObtenerValorCampo(respuestasSolicitud, campos, "Clave Catastral");
 
-            var respuestasSolicitud = respuestasCampos.Where(rcf => rcf.Solicitud == s.Id).ToList();
-
-            return new SolicitudConceptoDto
+            // Crear un DTO por cada concepto de la solicitud
+            foreach (var conceptoSolicitud in conceptosSolicitudActual)
             {
-                NombreConcepto = concepto?.Nombre ?? string.Empty,
-                FolioRecaudacion = s.FolioRecaudacion ?? string.Empty,
-                FechaPago = s.FechaPago,
-                CuentaPredial = ObtenerValorCampo(respuestasSolicitud, campos, "Clave Catastral"),
-                AnioInicial = ObtenerValorCampo(respuestasSolicitud, campos, "Año inicial"),
-                AnioFinal = ObtenerValorCampo(respuestasSolicitud, campos, "Año Final")
-            };
-        })
-        .OrderBy(x => x.CuentaPredial)
-        .ToList();
+                var concepto = conceptos.FirstOrDefault(c => c.Id.Equals(conceptoSolicitud.Concepto));
 
-        return resultadoFinal;
+                resultadoFinal.Add(new SolicitudConceptoDto
+                {
+                    NombreConcepto = concepto?.Nombre ?? string.Empty,
+                    FolioRecaudacion = solicitud.FolioRecaudacion ?? string.Empty,
+                    FechaPago = solicitud.FechaPago,
+                    CuentaPredial = cuentaPredial,
+                    AnioInicial = ObtenerValorCampo(respuestasSolicitud, campos, "Año Inicial"),
+                    AnioFinal = ObtenerValorCampo(respuestasSolicitud, campos, "Año Final")
+                });
+            }
+        }
+
+        // Filtrar solo los que tienen cuenta predial y ordenar
+        return resultadoFinal
+            .Where(dto => !string.IsNullOrEmpty(dto.CuentaPredial))
+            .OrderBy(x => x.CuentaPredial)
+            .ToList();
     }
 
     private string ObtenerValorCampo(List<ERP.CONTEXTPV.Entities.RespuestaCampoFormulario> respuestas, 
@@ -118,5 +132,20 @@ public class SolicitudService
             .ToListAsync();
 
         return respuestas.Cast<object>().ToList();
+    }
+
+    public async Task<List<object>> ObtenerTodosCamposAsync()
+    {
+        var campos = await _context.CampoFormulario
+            .Select(cf => new
+            {
+                Id = cf.Id,
+                Formulario = cf.Formulario,
+                Campo = cf.Campo,
+                Descripcion = cf.Descripcion
+            })
+            .ToListAsync();
+
+        return campos.Cast<object>().ToList();
     }
 }
