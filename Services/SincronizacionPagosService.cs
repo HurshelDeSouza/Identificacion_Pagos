@@ -367,6 +367,92 @@ public class SincronizacionPagosService
         return sb.ToString();
     }
 
+    public async Task<object> VerificarBasesDatosAsync()
+    {
+        var resultado = new
+        {
+            puntoVenta = await VerificarConexionAsync(_contextPV, "Punto de Venta"),
+            sigsa = await VerificarConexionAsync(_contextSigsa, "SIGSA"),
+            catastro = await VerificarConexionCatastroAsync()
+        };
+
+        return resultado;
+    }
+
+    private async Task<object> VerificarConexionAsync(DbContext context, string nombre)
+    {
+        try
+        {
+            await context.Database.CanConnectAsync();
+            var dbName = context.Database.GetDbConnection().Database;
+            return new { nombre, estado = "Conectado", baseDatos = dbName };
+        }
+        catch (Exception ex)
+        {
+            return new { nombre, estado = "Error", error = ex.Message };
+        }
+    }
+
+    private async Task<object> VerificarConexionCatastroAsync()
+    {
+        try
+        {
+            await _contextCatastro.Database.CanConnectAsync();
+            var dbName = _contextCatastro.Database.GetDbConnection().Database;
+            
+            // Intentar contar registros en ClaveCatastralPadron
+            var count = await _contextCatastro.ClaveCatastralPadron.CountAsync();
+            
+            return new { 
+                nombre = "Catastro", 
+                estado = "Conectado", 
+                baseDatos = dbName,
+                registrosClaveCatastral = count
+            };
+        }
+        catch (Exception ex)
+        {
+            return new { 
+                nombre = "Catastro", 
+                estado = "Error", 
+                error = ex.Message,
+                sugerencia = "Verificar que la base de datos existe y tiene la tabla ClaveCatastralPadron"
+            };
+        }
+    }
+
+    public async Task<object> ListarBasesDatosAsync()
+    {
+        try
+        {
+            var connection = _contextPV.Database.GetDbConnection();
+            await connection.OpenAsync();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "SHOW DATABASES";
+            
+            var databases = new List<string>();
+            using var reader = await command.ExecuteReaderAsync();
+            
+            while (await reader.ReadAsync())
+            {
+                databases.Add(reader.GetString(0));
+            }
+            
+            return new
+            {
+                total = databases.Count,
+                todasLasBases = databases,
+                basesConCoronango = databases.Where(db => db.ToLower().Contains("coronango")).ToList(),
+                basesConCatastro = databases.Where(db => db.ToLower().Contains("catastro")).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            return new { error = ex.Message };
+        }
+    }
+
     private string NormalizarCuentaPredial(string cuentaPredial)
     {
         if (string.IsNullOrWhiteSpace(cuentaPredial))

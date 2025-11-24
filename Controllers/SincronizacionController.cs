@@ -41,4 +41,32 @@ public class SincronizacionController : ControllerBase
             return StatusCode(500, new { mensaje = "Error al sincronizar pagos", error = ex.Message, stackTrace = ex.StackTrace });
         }
     }
+
+    [HttpGet("verificar-bases-datos")]
+    public async Task<ActionResult> VerificarBasesDatos()
+    {
+        try
+        {
+            var resultado = await _sincronizacionService.VerificarBasesDatosAsync();
+            return Ok(resultado);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al verificar bases de datos", error = ex.Message });
+        }
+    }
+
+    [HttpGet("listar-bases-datos")]
+    public async Task<ActionResult> ListarBasesDatos()
+    {
+        try
+        {
+            var resultado = await _sincronizacionService.ListarBasesDatosAsync();
+            return Ok(resultado);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al listar bases de datos", error = ex.Message });
+        }
+    }
 }

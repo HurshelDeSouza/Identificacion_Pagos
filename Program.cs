@@ -33,7 +33,7 @@ builder.Services.AddScoped<SigsaContext>(provider =>
     new SigsaContext(optionsBuilderSigsa.Options));
 
 // Configurar el contexto de Catastro con DbContextOptions para MySQL
-var connectionStringCatastro = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_catastro;User ID=root;Password=Truenos21;";
+var connectionStringCatastro = "Server=189.203.180.53;Port=3307;Database=db_grp_CORONANGO_CORONANGO_catastro;User ID=root;Password=Truenos21;";
 
 var optionsBuilderCatastro = new DbContextOptionsBuilder<DbErpCatastroContext>();
 optionsBuilderCatastro.UseMySql(connectionStringCatastro, ServerVersion.AutoDetect(connectionStringCatastro),
