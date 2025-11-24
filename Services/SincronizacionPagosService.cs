@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using IdentificacionPagos.DTOs;
 using ERP.CONTEXTPV;
 using ERP.CONTEXTSIGSA;
+using GRP.ContextCatastro;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace IdentificacionPagos.Services;
 
@@ -10,15 +12,18 @@ public class SincronizacionPagosService
 {
     private readonly DbErpPuntoVentaContext _contextPV;
     private readonly SigsaContext _contextSigsa;
+    private readonly DbErpCatastroContext _contextCatastro;
     private readonly SolicitudService _solicitudService;
 
     public SincronizacionPagosService(
         DbErpPuntoVentaContext contextPV, 
         SigsaContext contextSigsa,
+        DbErpCatastroContext contextCatastro,
         SolicitudService solicitudService)
     {
         _contextPV = contextPV;
         _contextSigsa = contextSigsa;
+        _contextCatastro = contextCatastro;
         _solicitudService = solicitudService;
     }
 
@@ -97,9 +102,45 @@ public class SincronizacionPagosService
         // Obtener los datos de la tarea anterior (ya incluye montos, descuentos y totales)
         var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
 
-        int registrosInsertados = 0;
-        int registrosOmitidos = 0;
-        var errores = new List<string>();
+        // Listas para el detalle
+        var registrosInsertados = new List<object>();
+        var registrosYaExistentes = new List<object>();
+        var registrosSinCuentaPredial = new List<object>();
+        var registrosSinFechas = new List<object>();
+
+        // OPTIMIZACIÓN: Cargar todas las cuentas catastrales de una vez
+        var cuentasNormalizadas = solicitudesConceptos
+            .Select(dto => NormalizarCuentaPredial(dto.CuentaPredial))
+            .Distinct()
+            .ToList();
+
+        HashSet<string> cuentasCatastralesSet;
+        try
+        {
+            var cuentasCatastrales = await _contextCatastro.ClaveCatastralPadron
+                .Where(ccp => cuentasNormalizadas.Contains(ccp.ClaveCatastral) && ccp.TipoClave == 3)
+                .Select(ccp => ccp.ClaveCatastral)
+                .ToListAsync();
+
+            cuentasCatastralesSet = new HashSet<string>(cuentasCatastrales);
+        }
+        catch (Exception)
+        {
+            // Si falla la conexión a catastro, asumir que todas las cuentas son válidas
+            cuentasCatastralesSet = new HashSet<string>(cuentasNormalizadas);
+        }
+
+        // OPTIMIZACIÓN: Cargar todos los folios existentes de una vez
+        var folios = solicitudesConceptos.Select(dto => dto.FolioRecaudacion).Distinct().ToList();
+        
+        var pagosExistentes = await _contextSigsa.SisPagos
+            .Where(p => folios.Contains(p.FolioPago))
+            .Select(p => new { p.FolioPago, p.Interlocutor })
+            .ToListAsync();
+
+        var pagosExistentesSet = new HashSet<string>(
+            pagosExistentes.Select(p => $"{p.FolioPago}|{p.Interlocutor}")
+        );
 
         foreach (var dto in solicitudesConceptos)
         {
@@ -111,7 +152,40 @@ public class SincronizacionPagosService
                 // Validar y procesar fechas
                 if (!ProcesarFechas(dto.AnioInicial, dto.AnioFinal, out DateTime? fechaCreacion, out DateTime? fechaVencimiento, out int? anioParaCampo))
                 {
-                    registrosOmitidos++;
+                    registrosSinFechas.Add(new
+                    {
+                        folio = dto.FolioRecaudacion,
+                        cuenta = dto.CuentaPredial,
+                        concepto = dto.NombreConcepto,
+                        monto = dto.Total,
+                        razon = "Sin fechas válidas (Año Inicial o Final vacíos)"
+                    });
+                    continue;
+                }
+
+                // Verificar si la cuenta existe en catastro (usando el set precargado)
+                if (!cuentasCatastralesSet.Contains(cuentaPredialNormalizada))
+                {
+                    registrosSinCuentaPredial.Add(new
+                    {
+                        folio = dto.FolioRecaudacion,
+                        cuenta = dto.CuentaPredial,
+                        cuentaNormalizada = cuentaPredialNormalizada,
+                        concepto = dto.NombreConcepto,
+                        monto = dto.Total
+                    });
+                    continue;
+                }
+
+                // Verificar si el pago ya existe (usando el set precargado)
+                var clavePago = $"{dto.FolioRecaudacion}|{cuentaPredialNormalizada}";
+                if (pagosExistentesSet.Contains(clavePago))
+                {
+                    registrosYaExistentes.Add(new
+                    {
+                        folio = dto.FolioRecaudacion,
+                        cuenta = dto.CuentaPredial
+                    });
                     continue;
                 }
 
@@ -140,25 +214,157 @@ public class SincronizacionPagosService
                 };
 
                 _contextSigsa.SisPagos.Add(pago);
-                registrosInsertados++;
+                
+                registrosInsertados.Add(new
+                {
+                    folio = dto.FolioRecaudacion,
+                    cuenta = dto.CuentaPredial,
+                    concepto = dto.NombreConcepto,
+                    monto = dto.Total
+                });
             }
             catch (Exception ex)
             {
-                errores.Add($"Error procesando registro {dto.CuentaPredial}: {ex.Message}");
+                registrosSinCuentaPredial.Add(new
+                {
+                    folio = dto.FolioRecaudacion,
+                    cuenta = dto.CuentaPredial,
+                    concepto = dto.NombreConcepto,
+                    monto = dto.Total,
+                    error = ex.Message
+                });
             }
         }
 
         // Guardar todos los cambios
         await _contextSigsa.SaveChangesAsync();
 
+        // Generar archivo de detalle
+        var archivoDetalle = GenerarArchivoDetalle(
+            registrosInsertados,
+            registrosYaExistentes,
+            registrosSinCuentaPredial,
+            registrosSinFechas
+        );
+
         return new
         {
             mensaje = "Sincronización completada",
-            registrosInsertados,
-            registrosOmitidos,
+            registrosInsertados = registrosInsertados.Count,
+            registrosYaExistentes = registrosYaExistentes.Count,
+            registrosSinCuentaPredial = registrosSinCuentaPredial.Count,
+            registrosSinFechas = registrosSinFechas.Count,
             totalProcesados = solicitudesConceptos.Count,
-            errores
+            archivoDetalle,
+            detalleInsertados = registrosInsertados.Take(10),
+            detalleYaExistentes = registrosYaExistentes.Take(10),
+            detalleSinCuentaPredial = registrosSinCuentaPredial.Take(10),
+            detalleSinFechas = registrosSinFechas.Take(10)
         };
+    }
+
+    private string GenerarArchivoDetalle(
+        List<object> insertados,
+        List<object> yaExistentes,
+        List<object> sinCuentaPredial,
+        List<object> sinFechas)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=".PadRight(80, '='));
+        sb.AppendLine("REPORTE DE SINCRONIZACIÓN DE PAGOS");
+        sb.AppendLine($"Fecha: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+        sb.AppendLine("=".PadRight(80, '='));
+        sb.AppendLine();
+
+        // Resumen
+        sb.AppendLine("RESUMEN:");
+        sb.AppendLine($"  - Registros insertados: {insertados.Count}");
+        sb.AppendLine($"  - Registros ya existentes: {yaExistentes.Count}");
+        sb.AppendLine($"  - Registros sin cuenta predial en catastro: {sinCuentaPredial.Count}");
+        sb.AppendLine($"  - Registros sin fechas válidas: {sinFechas.Count}");
+        sb.AppendLine($"  - Total procesados: {insertados.Count + yaExistentes.Count + sinCuentaPredial.Count + sinFechas.Count}");
+        sb.AppendLine();
+
+        // Detalle de insertados
+        if (insertados.Count > 0)
+        {
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine("1. REGISTROS INSERTADOS");
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine();
+            foreach (dynamic item in insertados)
+            {
+                sb.AppendLine($"  Folio: {item.folio}");
+                sb.AppendLine($"  Cuenta: {item.cuenta}");
+                sb.AppendLine($"  Concepto: {item.concepto}");
+                sb.AppendLine($"  Monto: ${item.monto:N2}");
+                sb.AppendLine("  " + "-".PadRight(76, '-'));
+            }
+            sb.AppendLine();
+        }
+
+        // Detalle de ya existentes
+        if (yaExistentes.Count > 0)
+        {
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine("2. REGISTROS YA EXISTENTES (OMITIDOS)");
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine();
+            foreach (dynamic item in yaExistentes)
+            {
+                sb.AppendLine($"  Folio: {item.folio}");
+                sb.AppendLine($"  Cuenta: {item.cuenta}");
+                sb.AppendLine("  " + "-".PadRight(76, '-'));
+            }
+            sb.AppendLine();
+        }
+
+        // Detalle de sin cuenta predial
+        if (sinCuentaPredial.Count > 0)
+        {
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine("3. REGISTROS SIN CUENTA PREDIAL EN CATASTRO");
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine();
+            foreach (dynamic item in sinCuentaPredial)
+            {
+                sb.AppendLine($"  Folio: {item.folio}");
+                sb.AppendLine($"  Cuenta: {item.cuenta}");
+                if (item.GetType().GetProperty("cuentaNormalizada") != null)
+                    sb.AppendLine($"  Cuenta Normalizada: {item.cuentaNormalizada}");
+                sb.AppendLine($"  Concepto: {item.concepto}");
+                sb.AppendLine($"  Monto: ${item.monto:N2}");
+                if (item.GetType().GetProperty("error") != null)
+                    sb.AppendLine($"  Error: {item.error}");
+                sb.AppendLine("  " + "-".PadRight(76, '-'));
+            }
+            sb.AppendLine();
+        }
+
+        // Detalle de sin fechas
+        if (sinFechas.Count > 0)
+        {
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine("4. REGISTROS SIN FECHAS VÁLIDAS");
+            sb.AppendLine("=".PadRight(80, '='));
+            sb.AppendLine();
+            foreach (dynamic item in sinFechas)
+            {
+                sb.AppendLine($"  Folio: {item.folio}");
+                sb.AppendLine($"  Cuenta: {item.cuenta}");
+                sb.AppendLine($"  Concepto: {item.concepto}");
+                sb.AppendLine($"  Monto: ${item.monto:N2}");
+                sb.AppendLine($"  Razón: {item.razon}");
+                sb.AppendLine("  " + "-".PadRight(76, '-'));
+            }
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("=".PadRight(80, '='));
+        sb.AppendLine("FIN DEL REPORTE");
+        sb.AppendLine("=".PadRight(80, '='));
+
+        return sb.ToString();
     }
 
     private string NormalizarCuentaPredial(string cuentaPredial)
