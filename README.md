@@ -18,15 +18,21 @@ Este proyecto permite obtener todos los conceptos de solicitudes que se hayan re
 
 ### Cadena de Conexión
 
-```
-Server=189.203.180.53
-Port=3307
-Database=db_erp_CORONANGO_CORONANGO_punto_venta
-User ID=root
-Password=Truenos21
+Las cadenas de conexión están configuradas en `appsettings.Development.json` (no incluido en el repositorio por seguridad).
+
+Crear el archivo `appsettings.Development.json` con el siguiente formato:
+
+```json
+{
+  "ConnectionStrings": {
+    "PuntoVentaConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD",
+    "SigsaConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD",
+    "CatastroConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD"
+  }
+}
 ```
 
-La cadena de conexión está configurada en `Program.cs` y utiliza el contexto `DbErpPuntoVentaContext` del paquete ERP.CONTEXTPV.
+La aplicación utiliza los contextos del paquete ERP.CONTEXTPV.
 
 ## Instalación y Ejecución
 
@@ -172,10 +178,7 @@ Este endpoint sincroniza los pagos identificados hacia la base de datos SIGSA (s
 
 ### Base de Datos SIGSA
 
-**Cadena de Conexión**: 
-```
-Server=189.203.180.53;Port=3307;Database=sbm_CORONANGO;User ID=root;Password=Truenos21
-```
+**Cadena de Conexión**: Configurada en `appsettings.Development.json` (ver sección de configuración)
 
 **Paquete**: `ERP.CONTEXTSIGSA v2.2.1.1`
 

@@ -7,7 +7,7 @@ using GRP.ContextCatastro;
 var builder = WebApplication.CreateBuilder(args);
 
 // Configurar el contexto de Punto de Venta con DbContextOptions para MySQL
-var connectionStringPV = "Server=189.203.180.53;Port=3307;Database=db_erp_CORONANGO_CORONANGO_punto_venta;User ID=root;Password=Truenos21;";
+var connectionStringPV = builder.Configuration.GetConnectionString("PuntoVentaConnection");
 
 var optionsBuilderPV = new DbContextOptionsBuilder<DbErpPuntoVentaContext>();
 optionsBuilderPV.UseMySql(connectionStringPV, ServerVersion.AutoDetect(connectionStringPV), 
@@ -33,7 +33,7 @@ builder.Services.AddScoped<SigsaContext>(provider =>
     new SigsaContext(optionsBuilderSigsa.Options));
 
 // Configurar el contexto de Catastro con DbContextOptions para MySQL
-var connectionStringCatastro = "Server=189.203.180.53;Port=3307;Database=db_grp_CORONANGO_CORONANGO_catastro;User ID=root;Password=Truenos21;";
+var connectionStringCatastro = builder.Configuration.GetConnectionString("CatastroConnection");
 
 var optionsBuilderCatastro = new DbContextOptionsBuilder<DbErpCatastroContext>();
 optionsBuilderCatastro.UseMySql(connectionStringCatastro, ServerVersion.AutoDetect(connectionStringCatastro),

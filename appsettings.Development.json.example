@@ -1,0 +1,13 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "PuntoVentaConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_PV_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD",
+    "SigsaConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_SIGSA_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD",
+    "CatastroConnection": "Server=YOUR_SERVER;Port=YOUR_PORT;Database=YOUR_CATASTRO_DATABASE;User ID=YOUR_USER;Password=YOUR_PASSWORD"
+  }
+}
