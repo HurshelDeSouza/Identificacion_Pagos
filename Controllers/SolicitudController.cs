@@ -9,10 +9,12 @@ namespace IdentificacionPagos.Controllers;
 public class SolicitudController : ControllerBase
 {
     private readonly SolicitudService _solicitudService;
+    private readonly ReporteExcelService _reporteExcelService;
 
-    public SolicitudController(SolicitudService solicitudService)
+    public SolicitudController(SolicitudService solicitudService, ReporteExcelService reporteExcelService)
     {
         _solicitudService = solicitudService;
+        _reporteExcelService = reporteExcelService;
     }
 
     [HttpGet("cuenta-predial")]
@@ -70,6 +72,25 @@ public class SolicitudController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { mensaje = "Error al obtener los campos", error = ex.Message });
+        }
+    }
+
+    [HttpGet("reporte-excel")]
+    public async Task<ActionResult> GenerarReporteExcel(
+        [FromQuery] DateTime? fechaInicial = null,
+        [FromQuery] DateTime? fechaFinal = null)
+    {
+        try
+        {
+            var datos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync(fechaInicial, fechaFinal);
+            var excelBytes = _reporteExcelService.GenerarReportePagos(datos, fechaInicial, fechaFinal);
+
+            var fileName = $"Reporte_Pagos_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al generar el reporte", error = ex.Message });
         }
     }
 }

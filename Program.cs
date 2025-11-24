@@ -49,6 +49,7 @@ builder.Services.AddScoped<DbErpCatastroContext>(provider =>
 builder.Services.AddScoped<SolicitudService>();
 builder.Services.AddScoped<SincronizacionPagosService>();
 builder.Services.AddScoped<ActualizacionPadronService>();
+builder.Services.AddScoped<ReporteExcelService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
