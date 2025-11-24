@@ -9,4 +9,8 @@ public class SolicitudConceptoDto
     public string CuentaPredial { get; set; } = string.Empty;
     public string AnioInicial { get; set; } = string.Empty;
     public string AnioFinal { get; set; } = string.Empty;
+    public string NombreContribuyente { get; set; } = string.Empty;
+    public decimal Monto { get; set; }
+    public decimal Descuento { get; set; }
+    public decimal Total { get; set; }
 }

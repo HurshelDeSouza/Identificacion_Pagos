@@ -24,26 +24,8 @@ public class SincronizacionPagosService
 
     public async Task<object> PrevisualizarPagosAsync()
     {
-        // Obtener los datos de la tarea anterior
+        // Obtener los datos de la tarea anterior (ya incluye montos, descuentos y totales)
         var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
-
-        // Obtener todos los montos de una vez para evitar consultas repetidas
-        var folios = solicitudesConceptos.Select(s => s.FolioRecaudacion).Distinct().ToList();
-        
-        var solicitudes = await _contextPV.Solicitud
-            .Where(s => folios.Contains(s.FolioRecaudacion))
-            .ToListAsync();
-
-        var solicitudIds = solicitudes.Select(s => s.Id).ToList();
-
-        var conceptosSolicitud = await _contextPV.ConceptoSolicitud
-            .Where(cs => solicitudIds.Contains(cs.Solicitud))
-            .ToListAsync();
-
-        var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
-        var conceptos = await _contextPV.Concepto
-            .Where(c => conceptoIds.Contains(c.Id))
-            .ToListAsync();
 
         var previsualizacion = new List<object>();
         int registrosValidos = 0;
@@ -61,11 +43,8 @@ public class SincronizacionPagosService
                 continue;
             }
 
-            // Obtener el monto sin hacer consulta a BD
-            var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
-            var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
-                cs.Solicitud == solicitud?.Id && cs.Concepto == dto.ConceptoId);
-            var monto = conceptoSol?.Monto ?? 0;
+            // Usar el monto directamente del DTO (ya viene calculado)
+            var monto = dto.Total; // Usar el total (monto - descuento)
 
             previsualizacion.Add(new
             {
@@ -115,26 +94,8 @@ public class SincronizacionPagosService
 
     public async Task<object> SincronizarPagosAsync()
     {
-        // Obtener los datos de la tarea anterior
+        // Obtener los datos de la tarea anterior (ya incluye montos, descuentos y totales)
         var solicitudesConceptos = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
-
-        // Obtener todos los montos de una vez
-        var folios = solicitudesConceptos.Select(s => s.FolioRecaudacion).Distinct().ToList();
-        
-        var solicitudes = await _contextPV.Solicitud
-            .Where(s => folios.Contains(s.FolioRecaudacion))
-            .ToListAsync();
-
-        var solicitudIds = solicitudes.Select(s => s.Id).ToList();
-
-        var conceptosSolicitud = await _contextPV.ConceptoSolicitud
-            .Where(cs => solicitudIds.Contains(cs.Solicitud))
-            .ToListAsync();
-
-        var conceptoIds = conceptosSolicitud.Select(cs => cs.Concepto).Distinct().ToList();
-        var conceptos = await _contextPV.Concepto
-            .Where(c => conceptoIds.Contains(c.Id))
-            .ToListAsync();
 
         int registrosInsertados = 0;
         int registrosOmitidos = 0;
@@ -154,11 +115,8 @@ public class SincronizacionPagosService
                     continue;
                 }
 
-                // Obtener el monto sin hacer consulta a BD
-                var solicitud = solicitudes.FirstOrDefault(s => s.FolioRecaudacion == dto.FolioRecaudacion);
-                var conceptoSol = conceptosSolicitud.FirstOrDefault(cs => 
-                    cs.Solicitud == solicitud?.Id && cs.Concepto == dto.ConceptoId);
-                var monto = conceptoSol?.Monto ?? 0;
+                // Usar el monto directamente del DTO (ya viene calculado)
+                var monto = dto.Total; // Usar el total (monto - descuento)
 
                 // Crear el registro de pago
                 var pago = new ERP.CONTEXTSIGSA.Entities.SIS_Pagos

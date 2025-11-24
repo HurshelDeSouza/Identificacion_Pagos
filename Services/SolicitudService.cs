@@ -13,7 +13,7 @@ public class SolicitudService
         _context = context;
     }
 
-    public async Task<List<SolicitudConceptoDto>> ObtenerSolicitudesConCuentaPredialAsync()
+    public async Task<List<SolicitudConceptoDto>> ObtenerSolicitudesConCuentaPredialAsync(DateTime? fechaInicial = null, DateTime? fechaFinal = null)
     {
         // Obtener IDs de solicitudes que tienen respuestas del formulario con id 1 (Cuenta Predial)
         var solicitudIds = await _context.RespuestaCampoFormulario
@@ -23,13 +23,39 @@ public class SolicitudService
             .ToListAsync();
 
         // Obtener solicitudes con sus relaciones usando Include
-        var solicitudes = await _context.Solicitud
-            .Where(s => solicitudIds.Contains(s.Id))
+        // Filtrar por estatus == 2 y rango de fechas
+        var query = _context.Solicitud
+            .Where(s => solicitudIds.Contains(s.Id) && s.Estatus == 2);
+
+        // Aplicar filtro de fecha si se proporciona
+        if (fechaInicial.HasValue)
+        {
+            query = query.Where(s => s.FechaPago >= fechaInicial.Value);
+        }
+
+        if (fechaFinal.HasValue)
+        {
+            query = query.Where(s => s.FechaPago <= fechaFinal.Value);
+        }
+
+        var solicitudes = await query.ToListAsync();
+
+        // Obtener IDs de clientes para cargar sus datos
+        var clienteIds = solicitudes
+            .Select(s => s.ClientePago ?? s.Cliente)
+            .Where(c => c.HasValue)
+            .Distinct()
+            .ToList();
+
+        // Obtener clientes
+        var clientes = await _context.Cliente
+            .Where(c => clienteIds.Contains(c.Id))
             .ToListAsync();
 
         // Obtener conceptos de solicitud con la relación de Concepto usando Include
+        var solicitudIdsActualizados = solicitudes.Select(s => s.Id).ToList();
         var conceptosSolicitud = await _context.ConceptoSolicitud
-            .Where(cs => solicitudIds.Contains(cs.Solicitud))
+            .Where(cs => solicitudIdsActualizados.Contains(cs.Solicitud))
             .ToListAsync();
 
         // Obtener todos los conceptos necesarios
@@ -61,10 +87,19 @@ public class SolicitudService
             // Obtener la cuenta predial
             var cuentaPredial = ObtenerValorCampo(respuestasSolicitud, campos, "Clave Catastral");
 
+            // Obtener el cliente (priorizar ClientePago, si no existe usar Cliente)
+            var clienteId = solicitud.ClientePago ?? solicitud.Cliente;
+            var cliente = clienteId.HasValue ? clientes.FirstOrDefault(c => c.Id == clienteId.Value) : null;
+            var nombreContribuyente = ObtenerNombreCompleto(cliente);
+
             // Crear un DTO por cada concepto de la solicitud
             foreach (var conceptoSolicitud in conceptosSolicitudActual)
             {
                 var concepto = conceptos.FirstOrDefault(c => c.Id.Equals(conceptoSolicitud.Concepto));
+                
+                var monto = conceptoSolicitud.Monto ?? 0;
+                var descuento = conceptoSolicitud.MontoDescuento ?? 0;
+                var total = monto - descuento;
 
                 resultadoFinal.Add(new SolicitudConceptoDto
                 {
@@ -74,7 +109,11 @@ public class SolicitudService
                     FechaPago = solicitud.FechaPago,
                     CuentaPredial = cuentaPredial,
                     AnioInicial = ObtenerValorCampo(respuestasSolicitud, campos, "Año Inicial"),
-                    AnioFinal = ObtenerValorCampo(respuestasSolicitud, campos, "Año Final")
+                    AnioFinal = ObtenerValorCampo(respuestasSolicitud, campos, "Año Final"),
+                    NombreContribuyente = nombreContribuyente,
+                    Monto = monto,
+                    Descuento = descuento,
+                    Total = total
                 });
             }
         }
@@ -102,6 +141,34 @@ public class SolicitudService
             }
         }
         return string.Empty;
+    }
+
+    private string ObtenerNombreCompleto(ERP.CONTEXTPV.Entities.Cliente? cliente)
+    {
+        if (cliente == null) return string.Empty;
+
+        // Tipo 1 = Persona Física, Tipo 2 = Persona Moral
+        if (cliente.Tipo == 1)
+        {
+            // Persona Física: Apellido Paterno + Apellido Materno + Nombre
+            var partes = new List<string>();
+            
+            if (!string.IsNullOrWhiteSpace(cliente.App))
+                partes.Add(cliente.App.Trim());
+            
+            if (!string.IsNullOrWhiteSpace(cliente.Apm))
+                partes.Add(cliente.Apm.Trim());
+            
+            if (!string.IsNullOrWhiteSpace(cliente.Nombre))
+                partes.Add(cliente.Nombre.Trim());
+            
+            return string.Join(" ", partes);
+        }
+        else
+        {
+            // Persona Moral: Razón Social
+            return cliente.RazonSocial?.Trim() ?? string.Empty;
+        }
     }
 
     public async Task<List<object>> ObtenerCamposFormularioAsync(int formularioId)

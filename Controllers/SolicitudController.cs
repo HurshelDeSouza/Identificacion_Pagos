@@ -16,11 +16,13 @@ public class SolicitudController : ControllerBase
     }
 
     [HttpGet("cuenta-predial")]
-    public async Task<ActionResult<List<SolicitudConceptoDto>>> ObtenerSolicitudesConCuentaPredial()
+    public async Task<ActionResult<List<SolicitudConceptoDto>>> ObtenerSolicitudesConCuentaPredial(
+        [FromQuery] DateTime? fechaInicial = null,
+        [FromQuery] DateTime? fechaFinal = null)
     {
         try
         {
-            var resultado = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync();
+            var resultado = await _solicitudService.ObtenerSolicitudesConCuentaPredialAsync(fechaInicial, fechaFinal);
             return Ok(resultado);
         }
         catch (Exception ex)
